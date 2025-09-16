@@ -1,8 +1,10 @@
 import { MongoClient } from 'mongodb';
+import dotenv from 'dotenv'
+dotenv.config();
 
 const uri =
   process.env.MONGO_URI ||
-  `mongodb+srv://rohitdhiman265498:rohitdhiman_265498@cluster0.hy8a5.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
+  `mongodb+srv://${process.env.AUTH_USERNAME}:${process.env.PASSWORD}@cluster0.hy8a5.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
 
 const client = new MongoClient(uri, { useNewUrlParser: true, useUnifiedTopology: true });
 
