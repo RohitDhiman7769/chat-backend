@@ -32,20 +32,74 @@ class IndexController {
      * @param {*} req  get userId from query params
      * @param {*} res send all users except the logged in user
      */
+    // async getUsers(req, res) {
+    //     try {
+    //         const userId = req.query.userId; 
+    //          const friendRecord = await db.collection('user_friends').findOne({
+    //             $or: [
+    //                 { added_by: userObjectId, added_to: loginUserObjectId },
+    //                 { added_by: loginUserObjectId, added_to: userObjectId }
+    //             ]
+    //         });
+    //         const users = await db.collection('users').find({
+    //             _id: { $ne: new ObjectId(userId) }
+    //         }, { projection: { password: 0 } }).toArray();
+    //         users.forEach(user => user._id = user._id.toString());
+    //         res.json({ message: "Data fetched successfully", code: 200, data: users });
+    //     } catch (err) {
+    //         res.status(500).json({ error: err.message });
+    //     }
+    // }
+
     async getUsers(req, res) {
         try {
-            // console.log('working', req.query)
-            const userId = req.query.userId ;
-            console.log('userId: ', userId);
-            const users = await db.collection('users').find({
-                _id: { $ne: new ObjectId(userId) }
-            }, { projection: { password: 0 } }).toArray();
-            users.forEach(user => user._id = user._id.toString());
-            res.json({ message: "Data fetched successfully", code: 200, data: users });
+            const userId = req.query.userId;
+            const userObjectId = new ObjectId(userId);
+
+            // 1. Find all confirmed friends
+            const friendRecords = await db.collection("user_friends").find({
+                added_status: 2,
+                $or: [
+                    { added_by: userObjectId },
+                    { added_to: userObjectId }
+                ]
+            }).toArray();
+
+            // 2. Collect friend IDs
+            const friendIds = friendRecords.map(record => {
+                if (record.added_by.toString() === userId) {
+                    return record.added_to;
+                } else {
+                    return record.added_by;
+                }
+            });
+
+            // 3. Find users who are NOT in friendIds and not the logged-in user
+            const users = await db.collection("users").find(
+                {
+                    _id: {
+                        $nin: [...friendIds, userObjectId] // exclude friends and self
+                    }
+                },
+                { projection: { password: 0 } }
+            ).toArray();
+
+            // 4. Convert _id to string
+            users.forEach(user => {
+                user._id = user._id.toString();
+            });
+
+            res.json({
+                message: "Non-friends fetched successfully",
+                code: 200,
+                data: users
+            });
+
         } catch (err) {
             res.status(500).json({ error: err.message });
         }
     }
+
 
 
 
@@ -192,7 +246,7 @@ class IndexController {
         try {
             const { user_id, confirm_user_request_id } = req.body;
             await db.collection('user_friends').updateOne(
-                { added_to: user_id, added_by: confirm_user_request_id },
+                { added_to: new ObjectId(user_id), added_by: new ObjectId(confirm_user_request_id) },
                 { $set: { added_status: 2 } }
             );
             const user = await db.collection('users').findOne({ _id: new ObjectId(confirm_user_request_id) });
@@ -210,37 +264,39 @@ class IndexController {
      * @returns 
      */
     async fetchAddedUsers(req, res) {
-        // console.log('working', client)
         try {
             const userId = req.query.userId;
-            if (!userId) return res.status(400).json({ error: "userId is required" });
+            const userObjectId = new ObjectId(userId); // convert once
 
-            let objectUserId;
-            try {
-                objectUserId = new ObjectId(userId);
-            } catch {
-                return res.status(400).json({ error: "Invalid userId" });
-            }
+            const addFriendRequest = await db.collection('user_friends').find(
+                {
+                    added_status: 2,
+                    $or: [
+                        { added_by: userObjectId },
+                        { added_to: userObjectId }
+                    ]
+                },
+                { projection: { added_by: 1, added_to: 1 } }
+            ).toArray();
 
-            const addFriendRequest = await db.collection('user_friends').find({
-                added_status: 2,
-                $or: [
-                    { added_by: userId },
-                    { added_to: userId }
-                ]
-            }, { projection: { added_by: 1, added_to: 1 } }).toArray();
+            console.log('addFriendRequest: ', addFriendRequest);
 
             const result_ids = [];
             for (const record of addFriendRequest) {
-                if (record.added_by === userId) {
+                if (record.added_by.toString() === userId) {
                     result_ids.push(record.added_to);
-                } else {
+                } else if (record.added_to.toString() === userId) {
                     result_ids.push(record.added_by);
                 }
             }
 
             const object_ids = result_ids.map(id => new ObjectId(id));
-            const friends = await db.collection('users').find({ _id: { $in: object_ids } }, { projection: { password: 0, reported_count: 0, initial_login: 0 } }).toArray();
+            const friends = await db.collection('users').find(
+                { _id: { $in: object_ids } },
+                { projection: { password: 0, reported_count: 0, initial_login: 0 } }
+            ).toArray();
+
+            // convert _id to string for frontend
             friends.forEach(friend => friend._id = friend._id.toString());
 
             res.json({ message: "Fetched Successfully", code: 200, data: friends });
@@ -248,6 +304,7 @@ class IndexController {
             res.status(500).json({ error: err.message });
         }
     }
+
 
     /**
      * 
@@ -264,21 +321,45 @@ class IndexController {
         }
     }
 
-    /**
-     * 
-     * @param {*} req get userId from query params 
-     * @param {*} res send single user profile data as response
-     */
+
     async fetchUserProfile(req, res) {
         try {
-            const userId = req.query.userId;
-            const user = await db.collection('users').findOne({ _id: new ObjectId(userId) }, { projection: { password: 0, initial_login: 0 } });
-            user._id = user._id.toString();
-            res.json({ message: "Update Successfully", code: 200, data: user });
+            const userId = req.query.userId; // profile to fetch
+            const loginUserId = req.query.loginUserId; // logged-in user
+            const userObjectId = new ObjectId(userId);
+            const loginUserObjectId = new ObjectId(loginUserId);
+
+            const friendRecord = await db.collection('user_friends').findOne({
+                $or: [
+                    { added_by: userObjectId, added_to: loginUserObjectId },
+                    { added_by: loginUserObjectId, added_to: userObjectId }
+                ]
+            });
+
+            const user = await db.collection('users').findOne(
+                { _id: userObjectId },
+                { projection: { email: 1, profile_img: 1 } }
+            );
+
+            if (!user) {
+                return res.status(404).json({ message: "User not found", code: 404 });
+            }
+
+            const isFriend = friendRecord && friendRecord.added_status === 2;
+
+            const responseUser = {
+                _id: user._id.toString(),
+                email: user.email || null,
+                profile_img: user.profile_img || null,
+                isFriend: isFriend
+            };
+
+            res.json({ message: "User fetched successfully", code: 200, data: responseUser });
         } catch (err) {
             res.status(500).json({ error: err.message });
         }
     }
+
 
     /**
      * 

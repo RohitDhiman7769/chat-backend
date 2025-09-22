@@ -24,7 +24,7 @@ class authController {
         try {
             const { email, password } = req.body;
             const user = await db.collection('users').findOne({ email });
-            if (!user) return res.status(400).json({ error: "Email not registered" });
+            if (!user) return res.json({code : 400, error: "Email not registered" });
 
             const isMatch = await bcrypt.compare(password, user.password);
             if (!isMatch) return res.status(401).json({ error: "Invalid password" });
@@ -50,7 +50,7 @@ class authController {
             if (!email || !password) return res.status(401).json({ error: "Missing required fields" });
 
             const user = await db.collection('users').findOne({ email });
-            if (user) return res.status(400).json({ error: "Email already registered" });
+            if (user) return res.json({code : 400, message: "Email already registered" });
 
             const hashed_password = await bcrypt.hash(password, 10);
             await db.collection('users').insertOne({

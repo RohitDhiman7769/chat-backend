@@ -69,4 +69,7 @@ router.get('/', indexController.home);
  */
 router.get('/about', indexController.about);
 
+
+// route
+
 export default router;
