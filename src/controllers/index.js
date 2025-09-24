@@ -367,22 +367,73 @@ class IndexController {
      * @param {*} res send success message as response
      * @returns 
      */
-    async reportUserId(req, res) {
-        try {
-            const userId = req.query.userId;
-            const user = await db.collection('users').findOne({ _id: new ObjectId(userId) }, { projection: { reported_count: 1 } });
-            if (!user) return res.status(404).json({ message: "User not found", code: 404 });
+    // async reportUserId(req, res) {
+    //     try {
+    //         const { reportedTo, reportedBy } = req.body;
 
-            const reported_count = parseInt(user.reported_count || 0, 10);
-            await db.collection('users').updateOne(
-                { _id: new ObjectId(userId) },
-                { $set: { reported_count: reported_count + 1 } }
-            );
-            res.json({ message: 'User Reported successfully', code: 200 });
-        } catch (err) {
-            res.status(500).json({ error: err.message });
+    //         const user = await db.collection('report').findOne({ _id: new ObjectId(userId) }, { projection: { reported_count: 1 } });
+    //         if (!user) return res.status(404).json({ message: "User not found", code: 404 });
+
+    //         const reported_count = parseInt(user.reported_count || 0, 10);
+    //         await db.collection('users').updateOne(
+    //             { _id: new ObjectId(userId) },
+    //             { $set: { reported_count: reported_count + 1 } }
+    //         );
+    //         res.json({ message: 'User Reported successfully', code: 200 });
+    //     } catch (err) {
+    //         res.status(500).json({ error: err.message });
+    //     }
+    // }
+    async reportUserId(req, res) {
+    try {
+        console.log('reportUserId called with body:', req.body);
+        const { reportedTo, reportedBy } = req.body.data || req.body;
+
+        if (!reportedTo || !reportedBy) {
+            return res.status(400).json({ message: "reportedTo and reportedBy are required", code: 400 });
         }
+
+        // Check if the report already exists
+        const existingReport = await db.collection('report').findOne({
+            reportedTo: new ObjectId(reportedTo),
+            reportedBy: new ObjectId(reportedBy)
+        });
+
+        if (existingReport) {
+            return res.status(400).json({ 
+                message: "You have already reported this user. Thanks for your effort!", 
+                code: 400 
+            });
+        }
+
+        // Insert new report
+        await db.collection('report').insertOne({
+            reportedTo: new ObjectId(reportedTo),
+            reportedBy: new ObjectId(reportedBy),
+            createdAt: new Date()
+        });
+
+        // Increment reported_count in users collection
+        const user = await db.collection('users').findOne({ _id: new ObjectId(reportedTo) });
+        if (!user) {
+            return res.status(404).json({ message: "User not found", code: 404 });
+        }
+
+        const reported_count = (user.reported_count || 0) + 1;
+
+        await db.collection('users').updateOne(
+            { _id: new ObjectId(reportedTo) },
+            { $set: { reported_count } }
+        );
+
+        res.json({ message: "User reported successfully", code: 200 });
+
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: err.message });
     }
+}
+
 }
 
 export default IndexController;

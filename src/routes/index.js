@@ -52,10 +52,10 @@ router.get('/update-initial-status', indexController.updateInitialPopupStatus);
 router.get('/get-single-user-profile-data', indexController.fetchUserProfile);
 
 /**
- * @route   GET api/users/report-user
+ * @route   POST api/users/report-user
  * @desc    Report user by id
  */
-router.get('/report-user', indexController.reportUserId);
+router.post('/report-user', indexController.reportUserId);
 
 /**
  * @route   GET api/users/
