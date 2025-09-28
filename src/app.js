@@ -7,7 +7,14 @@ import roomRoute from './routes/room/room_route.js';
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-app.use(cors());
+// app.use(cors());
+// CORS setup
+app.use(cors({
+  origin: "http://localhost:5173", // frontend URL
+  credentials: true,               // allow cookies
+  methods: ["GET", "POST", "PUT", "DELETE"],
+  allowedHeaders: ["Content-Type", "Authorization"]
+}));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 

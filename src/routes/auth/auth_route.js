@@ -7,7 +7,15 @@ const indexController = new authController();
  * @route   POST api/users/sign-up
  * @desc    Register user
  */
+authRoute.post('/refresh', indexController.refresh);
+
+
+/**
+ * @route   POST api/users/sign-up
+ * @desc    Register user
+ */
 authRoute.post('/sign-up', indexController.createUser);
+
 
 /**
  * @route   POST api/users/log-in

@@ -27,8 +27,8 @@ class roomController {
     async getRoomsList(req, res) {
         try {
             const userId = req.query.userId;
-            const room_details = await db.collection('rooms').find({ user_id: userId }).toArray();
-            console.log('sssssssssssssssssssss', room_details)
+            const room_details = await db.collection('rooms').find({ user_id: new ObjectId(userId) }).toArray();
+            // console.log('sssssssssssssssssssss', room_details)
             res.json({
                 message: "Room list fetched successfully",
                 code: 200,
